@@ -1,15 +1,6 @@
-from app.models.config import Config
 import json
-import random
 
-demo_config = {
-    'near': random.choice(['Seattle', 'New York', 'San Francisco']),
-    'dark_mode': str(random.getrandbits(1)),
-    'nojs': str(random.getrandbits(1)),
-    'lang_interface': random.choice(Config.LANGUAGES)['value'],
-    'lang_search': random.choice(Config.LANGUAGES)['value'],
-    'ctry': random.choice(Config.COUNTRIES)['value']
-}
+from test.conftest import demo_config
 
 
 def test_main(client):
@@ -48,8 +39,14 @@ def test_config(client):
     for key in demo_config.keys():
         assert config[key] == demo_config[key]
 
+    # Test setting config via search
+    custom_config = '&dark=1&lang_interface=lang_en'
+    rv = client.get('/search?q=test' + custom_config)
+    assert rv._status_code == 200
+    assert custom_config.replace('&', '&amp;') in str(rv.data)
+
 
 def test_opensearch(client):
     rv = client.get('/opensearch.xml')
     assert rv._status_code == 200
-    assert 'Whoogle' in str(rv.data)
+    assert '<ShortName>Whoogle</ShortName>' in str(rv.data)
