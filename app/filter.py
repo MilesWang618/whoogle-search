@@ -3,6 +3,7 @@ from app.utils.results import *
 from bs4 import BeautifulSoup
 from bs4.element import ResultSet, Tag
 from cryptography.fernet import Fernet
+from flask import render_template
 import re
 import urllib.parse as urlparse
 from urllib.parse import parse_qs
@@ -152,8 +153,9 @@ class Filter:
 
         if src.startswith(LOGO_URL):
             # Re-brand with Whoogle logo
-            element['src'] = 'static/img/logo.png'
-            element['style'] = 'height:40px;width:162px'
+            element.replace_with(BeautifulSoup(
+                render_template('logo.html', dark=self.dark),
+                features='html.parser'))
             return
         elif src.startswith(GOOG_IMG) or GOOG_STATIC in src:
             element['src'] = BLANK_B64
@@ -164,7 +166,6 @@ class Filter:
             is_element=True) + '&type=' + urlparse.quote(mime)
 
     def update_styling(self, soup) -> None:
-        """"""
         # Remove unnecessary button(s)
         for button in soup.find_all('button'):
             button.decompose()
