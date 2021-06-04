@@ -1,4 +1,5 @@
 from app.models.config import Config
+from datetime import datetime
 import xml.etree.ElementTree as ET
 import random
 import requests
@@ -9,6 +10,7 @@ from stem import Signal, SocketError
 from stem.control import Controller
 
 SEARCH_URL = 'https://www.google.com/search?gbv=1&q='
+MAPS_URL = 'https://maps.google.com/maps'
 AUTOCOMPLETE_URL = ('https://suggestqueries.google.com/'
                     'complete/search?client=toolbar&')
 
@@ -120,6 +122,10 @@ def gen_query(query, args, config, near_city=None) -> str:
     ) if config.lang_interface else ''
     param_dict['safe'] = '&safe=' + ('active' if config.safe else 'off')
 
+    # Block all sites specified in the user config
+    for blocked in config.block.split(','):
+        query += (' -site:' + blocked) if blocked else ''
+
     for val in param_dict.values():
         if not val:
             continue
@@ -146,6 +152,8 @@ class Request:
         self.language = config.lang_search
         self.mobile = 'Android' in normal_ua or 'iPhone' in normal_ua
         self.modified_user_agent = gen_user_agent(self.mobile)
+        if not self.mobile:
+            self.modified_user_agent_mobile = gen_user_agent(True)
 
         # Set up proxy, if previously configured
         if os.environ.get('WHOOGLE_PROXY_LOC'):
@@ -192,7 +200,8 @@ class Request:
         return [_.attrib['data'] for _ in
                 root.findall('.//suggestion/[@data]')]
 
-    def send(self, base_url=SEARCH_URL, query='', attempt=0) -> Response:
+    def send(self, base_url=SEARCH_URL, query='', attempt=0,
+             force_mobile=False) -> Response:
         """Sends an outbound request to a URL. Optionally sends the request
         using Tor, if enabled by the user.
 
@@ -206,14 +215,22 @@ class Request:
             Response: The Response object returned by the requests call
 
         """
+        if force_mobile and not self.mobile:
+            modified_user_agent = self.modified_user_agent_mobile
+        else:
+            modified_user_agent = self.modified_user_agent
+
         headers = {
-            'User-Agent': self.modified_user_agent
+            'User-Agent': modified_user_agent
         }
 
         # FIXME: Should investigate this further to ensure the consent
         # view is suppressed correctly
+        now = datetime.now()
         cookies = {
-            'CONSENT': 'PENDING+999'
+            'CONSENT': 'YES+cb.{:d}{:02d}{:02d}-17-p0.de+F+678'.format(
+                now.year, now.month, now.day
+            )
         }
 
         # Validate Tor conn and request new identity if the last one failed

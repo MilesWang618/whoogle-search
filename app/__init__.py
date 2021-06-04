@@ -22,7 +22,7 @@ app.default_key = generate_user_key()
 app.no_cookie_ips = []
 app.config['SECRET_KEY'] = os.urandom(32)
 app.config['SESSION_TYPE'] = 'filesystem'
-app.config['VERSION_NUMBER'] = '0.4.1'
+app.config['VERSION_NUMBER'] = '0.5.2'
 app.config['APP_ROOT'] = os.getenv(
     'APP_ROOT',
     os.path.dirname(os.path.abspath(__file__)))
@@ -33,6 +33,8 @@ app.config['LANGUAGES'] = json.load(open(
     os.path.join(app.config['STATIC_FOLDER'], 'settings/languages.json')))
 app.config['COUNTRIES'] = json.load(open(
     os.path.join(app.config['STATIC_FOLDER'], 'settings/countries.json')))
+app.config['TRANSLATIONS'] = json.load(open(
+    os.path.join(app.config['STATIC_FOLDER'], 'settings/translations.json')))
 app.config['CONFIG_PATH'] = os.getenv(
     'CONFIG_VOLUME',
     os.path.join(app.config['STATIC_FOLDER'], 'config'))
@@ -50,7 +52,7 @@ app.config['BANG_FILE'] = os.path.join(
     'bangs.json')
 app.config['CSP'] = 'default-src \'none\';' \
                     'manifest-src \'self\';' \
-                    'img-src \'self\';' \
+                    'img-src \'self\' data:;' \
                     'style-src \'self\' \'unsafe-inline\';' \
                     'script-src \'self\';' \
                     'media-src \'self\';' \

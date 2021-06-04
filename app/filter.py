@@ -1,4 +1,4 @@
-from app.request import VALID_PARAMS
+from app.request import VALID_PARAMS, MAPS_URL
 from app.utils.results import *
 from bs4 import BeautifulSoup
 from bs4.element import ResultSet, Tag
@@ -7,6 +7,34 @@ from flask import render_template
 import re
 import urllib.parse as urlparse
 from urllib.parse import parse_qs
+
+
+def strip_blocked_sites(query: str) -> str:
+    """Strips the blocked site list from the query, if one is being
+    used.
+
+    Args:
+        query: The query string
+
+    Returns:
+        str: The query string without any "-site:..." filters
+    """
+    return query[:query.find('-site:')] if '-site:' in query else query
+
+
+def extract_q(q_str: str, href: str) -> str:
+    """Extracts the 'q' element from a result link. This is typically
+    either the link to a result's website, or a string.
+
+    Args:
+        q_str: The result link to parse
+        href: The full url to check for standalone 'q' elements first,
+              rather than parsing the whole query string and then checking.
+
+    Returns:
+        str: The 'q' element of the link, or an empty string
+    """
+    return parse_qs(q_str)['q'][0] if ('&q=' in href or '?q=' in href) else ''
 
 
 class Filter:
@@ -210,20 +238,18 @@ class Filter:
             link['target'] = '_blank'
 
         result_link = urlparse.urlparse(href)
-        query_link = parse_qs(
-            result_link.query
-        )['q'][0] if '?q=' in href else ''
+        q = extract_q(result_link.query, href)
 
-        if query_link.startswith('/'):
+        if q.startswith('/'):
             # Internal google links (i.e. mail, maps, etc) should still
             # be forwarded to Google
-            link['href'] = 'https://google.com' + query_link
+            link['href'] = 'https://google.com' + q
         elif '/search?q=' in href:
             # "li:1" implies the query should be interpreted verbatim,
             # which is accomplished by wrapping the query in double quotes
             if 'li:1' in href:
-                query_link = '"' + query_link + '"'
-            new_search = 'search?q=' + self.encrypt_path(query_link)
+                q = '"' + q + '"'
+            new_search = 'search?q=' + self.encrypt_path(q)
 
             query_params = parse_qs(urlparse.urlparse(href).query)
             for param in VALID_PARAMS:
@@ -234,13 +260,17 @@ class Filter:
             link['href'] = new_search
         elif 'url?q=' in href:
             # Strip unneeded arguments
-            link['href'] = filter_link_args(query_link)
+            link['href'] = filter_link_args(q)
 
             # Add no-js option
             if self.nojs:
                 append_nojs(link)
         else:
-            link['href'] = href
+            if href.startswith(MAPS_URL):
+                # Maps links don't work if a site filter is applied
+                link['href'] = MAPS_URL + "?q=" + strip_blocked_sites(q)
+            else:
+                link['href'] = href
 
         # Replace link location if "alts" config is enabled
         if self.alt_redirect:
@@ -254,3 +284,65 @@ class Filter:
 
             # Replace link destination
             link_desc[0].replace_with(get_site_alt(link_desc[0]))
+
+    def view_image(self, soup) -> BeautifulSoup:
+        """Replaces the soup with a new one that handles mobile results and
+        adds the link of the image full res to the results.
+
+        Args:
+            soup: A BeautifulSoup object containing the image mobile results.
+
+        Returns:
+            BeautifulSoup: The new BeautifulSoup object
+        """
+
+        # get some tags that are unchanged between mobile and pc versions
+        search_input = soup.find_all('td', attrs={'class': "O4cRJf"})[0]
+        search_options = soup.find_all('div', attrs={'class': "M7pB2"})[0]
+        cor_suggested = soup.find_all('table', attrs={'class': "By0U9"})
+        next_pages = soup.find_all('table', attrs={'class': "uZgmoc"})[0]
+        information = soup.find_all('div', attrs={'class': "TuS8Ad"})[0]
+
+        results = []
+        # find results div
+        results_div = soup.find_all('div', attrs={'class': "nQvrDb"})[0]
+        # find all the results
+        results_all = results_div.find_all('div', attrs={'class': "lIMUZd"})
+
+        for item in results_all:
+            urls = item.find('a')['href'].split('&imgrefurl=')
+
+            img_url = urlparse.unquote(urls[0].replace('/imgres?imgurl=', ''))
+            webpage = urlparse.unquote(urls[1].split('&')[0])
+            img_tbn = urlparse.unquote(item.find('a').find('img')['src'])
+            results.append({
+                'domain': urlparse.urlparse(webpage).netloc,
+                'img_url': img_url,
+                'webpage': webpage,
+                'img_tbn': img_tbn
+            })
+
+        soup = BeautifulSoup(render_template('imageresults.html',
+                                             length=len(results),
+                                             results=results,
+                                             view_label="View Image"),
+                             features='html.parser')
+        # replace search input object
+        soup.find_all('td',
+                      attrs={'class': "O4cRJf"})[0].replaceWith(search_input)
+        # replace search options object (All, Images, Videos, etc.)
+        soup.find_all('div',
+                      attrs={'class': "M7pB2"})[0].replaceWith(search_options)
+        # replace correction suggested by google object if exists
+        if len(cor_suggested):
+            soup.find_all(
+                'table',
+                attrs={'class': "By0U9"}
+            )[0].replaceWith(cor_suggested[0])
+        # replace next page object at the bottom of the page
+        soup.find_all('table',
+                      attrs={'class': "uZgmoc"})[0].replaceWith(next_pages)
+        # replace information about user connection at the bottom of the page
+        soup.find_all('div',
+                      attrs={'class': "TuS8Ad"})[0].replaceWith(information)
+        return soup
