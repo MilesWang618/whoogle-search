@@ -2,7 +2,6 @@ import argparse
 import base64
 import io
 import json
-import os
 import pickle
 import urllib.parse as urlparse
 import uuid
@@ -14,10 +13,11 @@ from flask import jsonify, make_response, request, redirect, render_template, \
 from requests import exceptions
 
 from app import app
+from app.filter import strip_blocked_sites
 from app.models.config import Config
 from app.request import Request, TorError
 from app.utils.bangs import resolve_bang
-from app.utils.session import valid_user_session
+from app.utils.session import generate_user_key, valid_user_session
 from app.utils.search import *
 
 # Load DDG bang json files only on init
@@ -111,6 +111,11 @@ def unknown_page(e):
     return redirect(g.app_location)
 
 
+@app.route('/healthz', methods=['GET'])
+def healthz():
+    return ''
+
+
 @app.route('/', methods=['GET'])
 @auth_required
 def index():
@@ -126,9 +131,13 @@ def index():
     return render_template('index.html',
                            languages=app.config['LANGUAGES'],
                            countries=app.config['COUNTRIES'],
+                           translation=app.config['TRANSLATIONS'][
+                               g.user_config.get_localization_lang()
+                           ],
                            logo=render_template(
                                'logo.html',
                                dark=g.user_config.dark),
+                           config_disabled=app.config['CONFIG_DISABLE'],
                            config=g.user_config,
                            tor_available=int(os.environ.get('TOR_AVAILABLE')),
                            version_number=app.config['VERSION_NUMBER'])
@@ -152,6 +161,14 @@ def opensearch():
         main_url=opensearch_url,
         request_type='' if get_only else 'method="post"'
     ), 200, {'Content-Disposition': 'attachment; filename="opensearch.xml"'}
+
+
+@app.route('/search.html', methods=['GET'])
+def search_html():
+    search_url = g.app_location
+    if search_url.endswith('/'):
+        search_url = search_url[:-1]
+    return render_template('search.html', url=search_url)
 
 
 @app.route('/autocomplete', methods=['GET', 'POST'])
@@ -222,13 +239,16 @@ def search():
         query=urlparse.unquote(query),
         search_type=search_util.search_type,
         config=g.user_config,
+        translation=app.config['TRANSLATIONS'][
+            g.user_config.get_localization_lang()
+        ],
         response=response,
         version_number=app.config['VERSION_NUMBER'],
         search_header=(render_template(
             'header.html',
             config=g.user_config,
             logo=render_template('logo.html', dark=g.user_config.dark),
-            query=urlparse.unquote(query),
+            query=strip_blocked_sites(urlparse.unquote(query)),
             search_type=search_util.search_type,
             mobile=g.user_request.mobile)
                 if 'isch' not in search_util.search_type else '')), resp_code
@@ -237,9 +257,10 @@ def search():
 @app.route('/config', methods=['GET', 'POST', 'PUT'])
 @auth_required
 def config():
+    config_disabled = app.config['CONFIG_DISABLE']
     if request.method == 'GET':
         return json.dumps(g.user_config.__dict__)
-    elif request.method == 'PUT':
+    elif request.method == 'PUT' and not config_disabled:
         if 'name' in request.args:
             config_pkl = os.path.join(
                 app.config['CONFIG_PATH'],
@@ -250,7 +271,7 @@ def config():
             return json.dumps(session['config'])
         else:
             return json.dumps({})
-    else:
+    elif not config_disabled:
         config_data = request.form.to_dict()
         if 'url' not in config_data or not config_data['url']:
             config_data['url'] = g.user_config.url
@@ -270,6 +291,8 @@ def config():
 
         session['config'] = config_data
         return redirect(config_data['url'])
+    else:
+        return redirect(url_for('.index'), code=403)
 
 
 @app.route('/url', methods=['GET'])

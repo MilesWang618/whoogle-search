@@ -1,11 +1,12 @@
-from app.filter import Filter, get_first_link
-from app.utils.session import generate_user_key
-from app.request import gen_query
+import os
+from typing import Any
+
 from bs4 import BeautifulSoup as bsoup
 from cryptography.fernet import Fernet, InvalidToken
 from flask import g
-from typing import Any, Tuple
-import os
+
+from app.filter import Filter, get_first_link
+from app.request import gen_query
 
 TOR_BANNER = '<hr><h1 style="text-align: center">You are using Tor</h1><hr>'
 CAPTCHA = 'div class="g-recaptcha"'
@@ -120,10 +121,22 @@ class Search:
                                self.request_params,
                                self.config,
                                content_filter.near)
-        get_body = g.user_request.send(query=full_query)
+
+        # force mobile search when view image is true and
+        # the request is not already made by a mobile
+        view_image = ('tbm=isch' in full_query
+                      and self.config.view_image
+                      and not g.user_request.mobile)
+
+        get_body = g.user_request.send(query=full_query,
+                                       force_mobile=view_image)
 
         # Produce cleanable html soup from response
         html_soup = bsoup(content_filter.reskin(get_body.text), 'html.parser')
+
+        # Replace current soup if view_image is active
+        if view_image:
+            html_soup = content_filter.view_image(html_soup)
 
         # Indicate whether or not a Tor connection is active
         tor_banner = bsoup('', 'html.parser')

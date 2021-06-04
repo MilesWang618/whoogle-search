@@ -13,12 +13,27 @@ Contents
 1. [Features](#features)
 2. [Dependencies](#dependencies)
 3. [Install/Deploy](#install)
-4. [Environment Variables](#environment-variables)
+    1. [Heroku Quick Deploy](#a-heroku-quick-deploy)
+    2. [Repl.it](#b-replit)
+    3. [Fly.io](#c-flyio)
+    4. [pipx](#d-pipx)
+    5. [pip](#e-pip)
+    6. [Manual](#f-manual)
+    7. [Docker](#g-manual-docker)
+    8. [Arch/AUR](#arch-linux--arch-based-distributions)
+4. [Environment Variables and Configuration](#environment-variables)
 5. [Usage](#usage)
 6. [Extra Steps](#extra-steps)
-7. [FAQ](#faq)
-8. [Public Instances](#public-instances)
-9. [Screenshots](#screenshots)
+    1. [Set Primary Search Engine](#set-whoogle-as-your-primary-search-engine)
+    2. [Prevent Downtime (Heroku Only)](#prevent-downtime-heroku-only)
+    3. [Manual HTTPS Enforcement](#https-enforcement)
+7. [Contributing](#contributing)
+8. [FAQ](#faq)
+9. [Public Instances](#public-instances)
+10. [Screenshots](#screenshots)
+11. Mirrors (read-only)
+    1. [GitLab](https://gitlab.com/benbusby/whoogle-search)
+    2. [Gogs](https://gogs.benbusby.com/benbusby/whoogle-search)
 
 ## Features
 - No ads or sponsored content
@@ -76,7 +91,33 @@ Provides:
     - Supports custom domains
 - Downtime after periods of inactivity \([solution 1](https://repl.it/talk/ask/use-this-pingmat1replco-just-enter/28821/101298), [solution 2](https://repl.it/talk/learn/How-to-use-and-setup-UptimeRobot/9003)\)
 
-### C) [pipx](https://github.com/pipxproject/pipx#install-pipx)
+### C) [Fly.io](https://fly.io)
+
+You will need a [Fly.io](https://fly.io) account to do this. Fly requires a credit card to deploy anything, but you can have up to 3 shared-CPU VMs running full-time each month for free.
+
+#### Install the CLI:
+
+```bash
+curl -L https://fly.io/install.sh | sh
+```
+
+#### Deploy your app
+
+```bash
+fly apps create --org personal --port 5000
+# Choose a name and the Image builder
+# Enter `benbusby/whoogle-search:latest` as the image name
+fly deploy
+```
+
+Your app is now available at `https://<app-name>.fly.dev`.
+
+You can customize the `fly.toml`:
+- Remove the non-https service
+- Add environment variables under the `[env]` key
+  - Use `fly secrets set NAME=value` for more sensitive values like `WHOOGLE_PASS` and `WHOOGLE_PROXY_PASS`.
+
+### D) [pipx](https://github.com/pipxproject/pipx#install-pipx)
 Persistent install:
 
 `pipx install git+https://github.com/benbusby/whoogle-search.git`
@@ -85,26 +126,37 @@ Sandboxed temporary instance:
 
 `pipx run --spec git+https://github.com/benbusby/whoogle-search.git whoogle-search`
 
-### D) pip
+### E) pip
 `pip install whoogle-search`
 
 ```bash
 $ whoogle-search --help
-usage: whoogle-search [-h] [--port <port number>] [--host <ip address>] [--debug]
-                      [--https-only]
+usage: whoogle-search [-h] [--port <port number>] [--host <ip address>] [--debug] [--https-only] [--userpass <username:password>]
+                      [--proxyauth <username:password>] [--proxytype <socks4|socks5|http>] [--proxyloc <location:port>]
 
 Whoogle Search console runner
 
 optional arguments:
-  -h, --help            show this help message and exit
+  -h, --help            Show this help message and exit
   --port <port number>  Specifies a port to run on (default 5000)
   --host <ip address>   Specifies the host address to use (default 127.0.0.1)
   --debug               Activates debug mode for the server (default False)
-  --https-only          Enforces HTTPS redirects for all requests (default False)
+  --https-only          Enforces HTTPS redirects for all requests
+  --userpass <username:password>
+                        Sets a username/password basic auth combo (default None)
+  --proxyauth <username:password>
+                        Sets a username/password for a HTTP/SOCKS proxy (default None)
+  --proxytype <socks4|socks5|http>
+                        Sets a proxy type for all connections (default None)
+  --proxyloc <location:port>
+                        Sets a proxy location for all connections (default None)
 ```
 See the [available environment variables](#environment-variables) for additional configuration.
 
-### E) Manual
+### F) Manual
+
+*Note: `Content-Security-Policy` headers are already sent by Whoogle -- you don't/shouldn't need to apply a CSP header yourself*
+
 Clone the repo and run the following commands to start the app in a local-only environment:
 
 ```bash
@@ -161,7 +213,7 @@ sudo systemctl enable whoogle
 sudo systemctl start whoogle
 ```
 
-### F) Manual (Docker)
+### G) Manual (Docker)
 1. Ensure the Docker daemon is running, and is accessible by your user account
   - To add user permissions, you can execute `sudo usermod -aG docker yourusername`
   - Running `docker ps` should return something besides an error. If you encounter an error saying the daemon isn't running, try `sudo systemctl start docker` (Linux) or ensure the docker tool is running (Windows/macOS).
@@ -237,7 +289,11 @@ Depending on your preferences, you can also deploy the app yourself on your own 
   - A bit more experience or willingness to work through issues
 
 ## Environment Variables
-There are a few optional environment variables available for customizing a Whoogle instance. These can be set manually, or copied into `whoogle.env` and enabled by setting `WHOOGLE_DOTENV=1`.
+There are a few optional environment variables available for customizing a Whoogle instance. These can be set manually, or copied into `whoogle.env` and enabled for your preferred deployment method:
+
+- Local runs: Set `WHOOGLE_DOTENV=1` before running
+- With `docker-compose`: Uncomment the `env_file` option
+- With `docker build/run`: Add `--env-file ./whoogle.env` to your command
 
 | Variable           | Description                                                                               |
 | ------------------ | ----------------------------------------------------------------------------------------- |
@@ -258,18 +314,22 @@ There are a few optional environment variables available for customizing a Whoog
 ### Config Environment Variables
 These environment variables allow setting default config values, but can be overwritten manually by using the home page config menu. These allow a shortcut for destroying/rebuilding an instance to the same config state every time.
 
-| Variable                | Description                                                     |
-| ----------------------- | --------------------------------------------------------------- |
-| WHOOGLE_CONFIG_COUNTRY  | Filter results by hosting country                               |
-| WHOOGLE_CONFIG_LANGUAGE | Set interface and search result language                        |
-| WHOOGLE_CONFIG_DARK     | Enable dark theme                                               |
-| WHOOGLE_CONFIG_SAFE     | Enable safe searches                                            |
-| WHOOGLE_CONFIG_ALTS     | Use social media site alternatives (nitter, invidious, etc)     |
-| WHOOGLE_CONFIG_TOR      | Use Tor routing (if available)                                  |
-| WHOOGLE_CONFIG_NEW_TAB  | Always open results in new tab                                  |
-| WHOOGLE_CONFIG_GET_ONLY | Search using GET requests only                                  |
-| WHOOGLE_CONFIG_URL      | The root url of the instance (`https://<your url>/`)            |
-| WHOOGLE_CONFIG_STYLE    | The custom CSS to use for styling (must be single line)         |
+| Variable                       | Description                                                     |
+| ------------------------------ | --------------------------------------------------------------- |
+| WHOOGLE_CONFIG_DISABLE         | Hide config from UI and disallow changes to config by client    |
+| WHOOGLE_CONFIG_COUNTRY         | Filter results by hosting country                               |
+| WHOOGLE_CONFIG_LANGUAGE        | Set interface language                                          |
+| WHOOGLE_CONFIG_SEARCH_LANGUAGE | Set search result language                                      |
+| WHOOGLE_CONFIG_BLOCK           | Block websites from search results (use comma-separated list)   |
+| WHOOGLE_CONFIG_DARK            | Enable dark theme                                               |
+| WHOOGLE_CONFIG_SAFE            | Enable safe searches                                            |
+| WHOOGLE_CONFIG_ALTS            | Use social media site alternatives (nitter, invidious, etc)     |
+| WHOOGLE_CONFIG_TOR             | Use Tor routing (if available)                                  |
+| WHOOGLE_CONFIG_NEW_TAB         | Always open results in new tab                                  |
+| WHOOGLE_CONFIG_VIEW_IMAGE      | Enable View Image option                                        |
+| WHOOGLE_CONFIG_GET_ONLY        | Search using GET requests only                                  |
+| WHOOGLE_CONFIG_URL             | The root url of the instance (`https://<your url>/`)            |
+| WHOOGLE_CONFIG_STYLE           | The custom CSS to use for styling (should be single line)       |
 
 ## Usage
 Same as most search engines, with the exception of filtering by time range.
@@ -280,7 +340,7 @@ To filter by a range of time, append ":past <time>" to the end of your search, w
 ### Set Whoogle as your primary search engine
 *Note: If you're using a reverse proxy to run Whoogle Search, make sure the "Root URL" config option on the home page is set to your URL before going through these steps.*
 
-Update browser settings:
+Browser settings:
   - Firefox (Desktop)
     - Navigate to your app's url, and click the 3 dot menu in the address bar. At the bottom, there should be an option to "Add Search Engine". Once you've clicked this, open your Firefox Preferences menu, click "Search" in the left menu, and use the available dropdown to select "Whoogle" from the list.
   - Firefox (iOS)
@@ -310,16 +370,11 @@ Update browser settings:
 		   - Keyword: `whoogle`
 
 	  2. Go to `Default Results` and click the `Setup fallback results` button. Click `+` and add Whoogle, then  drag it to the top.
-  - Others (TODO)
-
-### Customizing and Configuration
-Whoogle currently allows a few minor configuration settings, accessible from the home page:
-  - "Near"
-    - Set to a city name to narrow your results to a general geographic region. This can be useful if you rely on being able to search for things like "pizza places" and see results in your city, rather than results from wherever the server is located.
-  - Dark Mode
-    - Sets background to pure black
-  - NoJS Mode (Experimental)
-    - Adds a separate link for each search result that will open the webpage without any javascript content served. Can be useful if you're seeking a no-javascript experience on mobile, but otherwise could just be accomplished with a browser plugin.
+  - Chrome/Chromium-based Browsers
+    - Automatic
+      - Visit the home page of your Whoogle Search instance -- this may automatically add the search engine to your list of search engines. If not, you can add it manually.
+    - Manual
+      - Under search engines > manage search engines > add, manually enter your Whoogle instance details with a `<whoogle url>/search?q=%s` formatted search URL.
 
 ### Prevent Downtime (Heroku only)
 Part of the deal with Heroku's free tier is that you're allocated 550 hours/month (meaning it can't stay active 24/7), and the app is temporarily shut down after 30 minutes of inactivity. Once it becomes inactive, any Whoogle searches will still work, but it'll take an extra 10-15 seconds for the app to come back online before displaying the result, which can be frustrating if you're in a hurry.
@@ -341,7 +396,55 @@ Note: You should have your own domain name and [an https certificate](https://le
 - Pip/Pipx: Add the `--https-only` flag to the end of the `whoogle-search` command
 - Default `run` script: Modify the script locally to include the `--https-only` flag at the end of the python run command
 
-Available config values are `near`, `nojs`, `dark` and `url`.
+## Contributing
+
+Under the hood, Whoogle is a basic Flask app with the following structure:
+
+- `app/`
+  - `routes.py`: Primary app entrypoint, contains all API routes
+  - `request.py`: Handles all outbound requests, including proxied/Tor connectivity
+  - `filter.py`: Functions and utilities used for filtering out content from upstream Google search results
+  - `utils/`
+    - `bangs.py`: All logic related to handling DDG-style "bang" queries
+    - `results.py`: Utility functions for interpreting/modifying individual search results
+    - `search.py`: Creates and handles new search queries
+    - `session.py`: Miscellaneous methods related to user sessions
+  - `templates/`
+    - `index.html`: The home page template
+    - `display.html`: The search results template
+    - `header.html`: A general "top of the page" query header for desktop and mobile
+    - `search.html`: An iframe-able search page
+    - `logo.html`: A template consisting mostly of the Whoogle logo as an SVG (separated to help keep `index.html` a bit cleaner)
+    - `opensearch.xml`: A template used for supporting [OpenSearch](https://developer.mozilla.org/en-US/docs/Web/OpenSearch).
+    - `imageresults.html`: An "exprimental" template used for supporting the "Full Size" image feature on desktop.
+  - `static/<css|js>`
+    - CSS/Javascript files, should be self-explanatory
+  - `static/settings`
+    - Key-value JSON files for establishing valid configuration values
+    
+
+If you're new to the project, the easiest way to get started would be to try fixing [an open bug report](https://github.com/benbusby/whoogle-search/issues?q=is%3Aissue+is%3Aopen+label%3Abug). If there aren't any open, or if the open ones are too stale, try taking on a [feature request](https://github.com/benbusby/whoogle-search/issues?q=is%3Aissue+is%3Aopen+label%3Aenhancement). Generally speaking, if you can write something that has any potential of breaking down in the future, you should write a test for it.
+
+The project follows the [PEP 8 Style Guide](https://www.python.org/dev/peps/pep-0008/), but is liable to change. Static typing should always be used when possible. Function documentation is greatly appreciated, and typically follows the below format:
+
+```python
+def contains(x: list, y: int) -> bool:
+    """Check a list (x) for the presence of an element (y)
+
+    Args:
+        x: The list to inspect
+        y: The int to look for
+
+    Returns:
+        bool: True if the list contains the item, otherwise False
+    """
+
+    return y in x
+``` 
+
+#### Translating
+
+Whoogle currently supports translations using [`translations.json`](https://github.com/benbusby/whoogle-search/blob/main/app/static/settings/translations.json). Language values in this file need to match the "value" of the according language in [`languages.json`](https://github.com/benbusby/whoogle-search/blob/main/app/static/settings/languages.json) (i.e. "lang_en" for English, "lang_es" for Spanish, etc). After you add a new set of translations to `translations.json`, open a PR with your changes and they will be merged in as soon as possible.
 
 ## FAQ
 **What's the difference between this and [Searx](https://github.com/asciimoo/searx)?**
@@ -365,7 +468,9 @@ A lot of the app currently piggybacks on Google's existing support for fetching 
 - [https://whoogle.kavin.rocks](https://whoogle.kavin.rocks) or [http://whoogledq5f5wly5p4i2ohnvjwlihnlg4oajjum2oeddfwqdwupbuhqd.onion](http://whoogledq5f5wly5p4i2ohnvjwlihnlg4oajjum2oeddfwqdwupbuhqd.onion)
 - [https://search.garudalinux.org](https://search.garudalinux.org)
 - [https://whooglesearch.net/](https://whooglesearch.net/)
-- [https://search.whoogle.tech/](https://search.whoogle.tech/)
+- [https://search.flawcra.cc/](https://search.flawcra.cc/)
+- [https://search.exonip.de/](https://search.exonip.de/)
+- [https://whoogle.silkky.cloud/](https://whoogle.silkky.cloud/)
 ## Screenshots
 #### Desktop
 ![Whoogle Desktop](docs/screenshot_desktop.jpg)
