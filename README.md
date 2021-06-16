@@ -27,6 +27,7 @@ Contents
     1. [Set Primary Search Engine](#set-whoogle-as-your-primary-search-engine)
     2. [Prevent Downtime (Heroku Only)](#prevent-downtime-heroku-only)
     3. [Manual HTTPS Enforcement](#https-enforcement)
+    4. [Using with Firefox Containers](#using-with-firefox-containers)
 7. [Contributing](#contributing)
 8. [FAQ](#faq)
 9. [Public Instances](#public-instances)
@@ -175,7 +176,7 @@ Description=Whoogle
 # Proxy configuration, uncomment to enable
 #Environment=WHOOGLE_PROXY_USER=<proxy username>
 #Environment=WHOOGLE_PROXY_PASS=<proxy password>
-#Environment=WHOOGLE_PROXY_TYPE=<proxy type (http|proxy4|proxy5)
+#Environment=WHOOGLE_PROXY_TYPE=<proxy type (http|https|proxy4|proxy5)
 #Environment=WHOOGLE_PROXY_LOC=<proxy host/ip>
 # Site alternative configurations, uncomment to enable
 # Note: If not set, the feature will still be available
@@ -184,6 +185,7 @@ Description=Whoogle
 #Environment=WHOOGLE_ALT_YT=invidious.snopyta.org
 #Environment=WHOOGLE_ALT_IG=bibliogram.art/u
 #Environment=WHOOGLE_ALT_RD=libredd.it
+#Environment=WHOOGLE_ALT_TL=lingva.ml
 # Load values from dotenv only
 #Environment=WHOOGLE_DOTENV=1
 Type=simple
@@ -298,6 +300,7 @@ There are a few optional environment variables available for customizing a Whoog
 | WHOOGLE_ALT_YT     | The youtube.com alternative to use when site alternatives are enabled in the config.      |
 | WHOOGLE_ALT_IG     | The instagram.com alternative to use when site alternatives are enabled in the config.    |
 | WHOOGLE_ALT_RD     | The reddit.com alternative to use when site alternatives are enabled in the config.       |
+| WHOOGLE_ALT_TL     | The Google Translate alternative to use. This is used for all "translate ____" searches.  |
 
 ### Config Environment Variables
 These environment variables allow setting default config values, but can be overwritten manually by using the home page config menu. These allow a shortcut for destroying/rebuilding an instance to the same config state every time.
@@ -330,7 +333,12 @@ To filter by a range of time, append ":past <time>" to the end of your search, w
 
 Browser settings:
   - Firefox (Desktop)
-    - Navigate to your app's url, and click the 3 dot menu in the address bar. At the bottom, there should be an option to "Add Search Engine". Once you've clicked this, open your Firefox Preferences menu, click "Search" in the left menu, and use the available dropdown to select "Whoogle" from the list.
+    - Version 89+
+      - Navigate to your app's url, right click the address bar, and select "Add Search Engine".
+    - Previous versions
+      - Navigate to your app's url, and click the 3 dot menu in the address bar. At the bottom, there should be an option to "Add Search Engine".
+    - Once you've added the new search engine, open your Firefox Preferences menu, click "Search" in the left menu, and use the available dropdown to select "Whoogle" from the list.
+    - **Note**: If your Whoogle instance uses Firefox Containers, you'll need to [go through the steps here](#using-with-firefox-containers) to get it working properly.
   - Firefox (iOS)
     - In the mobile app Settings page, tap "Search" within the "General" section. There should be an option titled "Add Search Engine" to select. It should prompt you to enter a title and search query url - use the following elements to fill out the form:
       - Title: "Whoogle"
@@ -383,6 +391,15 @@ Note: You should have your own domain name and [an https certificate](https://le
 - Docker image: Set the environment variable HTTPS_ONLY=1
 - Pip/Pipx: Add the `--https-only` flag to the end of the `whoogle-search` command
 - Default `run` script: Modify the script locally to include the `--https-only` flag at the end of the python run command
+	
+### Using with Firefox Containers
+Unfortunately, Firefox Containers do not currently pass through `POST` requests (the default) to the engine, and Firefox caches the opensearch template on initial page load. To get around this, you can take the following steps to get it working as expected:
+
+1. Remove any existing Whoogle search engines from Firefox settings
+2. Enable `GET Requests Only` in Whoogle config
+3. Clear Firefox cache
+4. Restart Firefox
+5. Navigate to Whoogle instance and [re-add the engine](#set-whoogle-as-your-primary-search-engine)
 
 ## Contributing
 
