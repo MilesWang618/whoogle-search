@@ -13,7 +13,6 @@ from flask import jsonify, make_response, request, redirect, render_template, \
 from requests import exceptions
 
 from app import app
-from app.filter import strip_blocked_sites
 from app.models.config import Config
 from app.request import Request, TorError
 from app.utils.bangs import resolve_bang
@@ -231,6 +230,12 @@ def search():
     if search_util.feeling_lucky:
         return redirect(response, code=303)
 
+    # If the user is attempting to translate a string, determine the correct
+    # string for formatting the lingva.ml url
+    localization_lang = g.user_config.get_localization_lang()
+    translation = app.config['TRANSLATIONS'][localization_lang]
+    translate_to = localization_lang.replace('lang_', '')
+
     # Return 503 if temporarily blocked by captcha
     resp_code = 503 if has_captcha(str(response)) else 200
 
@@ -239,16 +244,24 @@ def search():
         query=urlparse.unquote(query),
         search_type=search_util.search_type,
         config=g.user_config,
-        translation=app.config['TRANSLATIONS'][
-            g.user_config.get_localization_lang()
-        ],
+        lingva_url=app.config['TRANSLATE_URL'],
+        translation=translation,
+        translate_to=translate_to,
+        translate_str=query.replace(
+            'translate', ''
+        ).replace(
+            translation['translate'], ''
+        ),
+        is_translation=any(
+            _ in query.lower() for _ in [translation['translate'], 'translate']
+        ) and not search_util.search_type,  # Standard search queries only
         response=response,
         version_number=app.config['VERSION_NUMBER'],
         search_header=(render_template(
             'header.html',
             config=g.user_config,
             logo=render_template('logo.html', dark=g.user_config.dark),
-            query=strip_blocked_sites(urlparse.unquote(query)),
+            query=urlparse.unquote(query),
             search_type=search_util.search_type,
             mobile=g.user_request.mobile)
                 if 'isch' not in search_util.search_type else '')), resp_code
